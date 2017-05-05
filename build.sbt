@@ -30,6 +30,14 @@ lazy val noPublishSettings = Seq(
 
 lazy val defaultModuleSettings = commonSettings ++ Revolver.settings ++ SonatypePublish.settings
 
+lazy val http = project.in(file("http"))
+  .dependsOn(baker)
+  .settings(defaultModuleSettings: _*)
+    .settings(
+      libraryDependencies ++=
+        compileDeps(akkaHttp)
+    )
+
 lazy val baker = project.in(file("core"))
   .settings(defaultModuleSettings: _*)
   .settings(
