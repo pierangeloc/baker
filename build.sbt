@@ -33,18 +33,20 @@ lazy val defaultModuleSettings = commonSettings ++ Revolver.settings ++ Sonatype
 lazy val http = project.in(file("http"))
   .dependsOn(baker)
   .settings(defaultModuleSettings: _*)
-    .settings(
-      libraryDependencies ++=
-        compileDeps(
-          akkaHttp,
-          akkaClusterHttpManagement,
-          akkaVisualisation,
-          ficusConfig
-        ) ++ testDeps(
-          slf4jSimple,
-          scalaTest
-        )
-    )
+  .settings(
+    unmanagedResourceDirectories in Compile += baseDirectory.value / "frontend" / "dist",
+    libraryDependencies ++=
+      compileDeps(
+        akkaHttp,
+        akkaClusterHttpManagement,
+        akkaVisualisation,
+        ficusConfig,
+        akkaHttpSprayJson, jacksonJsonSchema, akkaHttpJackson, jacksonScala
+      ) ++ testDeps(
+        slf4jSimple,
+        scalaTest
+      )
+  )
 
 lazy val baker = project.in(file("core"))
   .settings(defaultModuleSettings: _*)

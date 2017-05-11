@@ -19,7 +19,7 @@ object Main extends App with ConfiguredActorSystem with Routes {
   val interface: String = "localhost"
   val port: Int = 8080
 
-  val bind = Http().bindAndHandle(resourceRoutes ~ routes, interface, port)
+  val bind = Http().bindAndHandle(dashboardRoutes ~ apiRoutes, interface, port)
   val httpBind = s"http://${interface}:${port}"
 
   bind.onComplete {
