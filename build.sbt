@@ -35,7 +35,15 @@ lazy val http = project.in(file("http"))
   .settings(defaultModuleSettings: _*)
     .settings(
       libraryDependencies ++=
-        compileDeps(akkaHttp)
+        compileDeps(
+          akkaHttp,
+          akkaClusterHttpManagement,
+          akkaVisualisation,
+          ficusConfig
+        ) ++ testDeps(
+          slf4jSimple,
+          scalaTest
+        )
     )
 
 lazy val baker = project.in(file("core"))

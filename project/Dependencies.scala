@@ -5,6 +5,7 @@ object Dependencies {
 
   val akkaVersion = "2.4.17"
   val kageraVersion = "0.2.20"
+  val akkaVisualisationVersion = "1.0.0-SNAPSHOT"
 
   val typeSafeConfig =            "com.typesafe"               %  "config"                             % "1.3.1"
 
@@ -21,6 +22,8 @@ object Dependencies {
   val akkaSlf4j =                 "com.typesafe.akka"          %% "akka-slf4j"                         % akkaVersion
   val akkaTestKit =               "com.typesafe.akka"          %% "akka-testkit"                       % akkaVersion
   val akkaHttp =                  "com.typesafe.akka"          %% "akka-http"                          % "10.0.6"
+  val akkaClusterHttpManagement = "com.lightbend.akka"         %% "akka-management-cluster-http"       % "0.2"
+  val akkaVisualisation =         "com.ing.akka"               %% "akka-visualisation"                 % akkaVisualisationVersion
 
   val levelDB   =                 "org.iq80.leveldb"           %  "leveldb"                            % "0.7"
   val levelDBJni =                "org.fusesource.leveldbjni"  %  "leveldbjni-all"                     % "1.8"
@@ -45,6 +48,7 @@ object Dependencies {
   val jodaConvert =               "org.joda"                   %  "joda-convert"                       % "1.8.1"
   val scalaXml =                  "org.scala-lang.modules"     %% "scala-xml"                          % "1.0.4"
   val slf4jApi =                  "org.slf4j"                  %  "slf4j-api"                          % "1.7.25"
+  val slf4jSimple =               "org.slf4j"                  %  "slf4j-simple"                       % "1.7.25"
 
   def scopeDeps(scope: String, modules: Seq[ModuleID]) =  modules.map(m => m % scope)
   def compileDeps(modules: ModuleID*) = modules.toSeq

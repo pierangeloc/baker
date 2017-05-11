@@ -1,0 +1,1 @@
+resolvers += "Akka Bintray Repo" at "https://dl.bintray.com/akka/maven/"
