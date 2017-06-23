@@ -23,7 +23,12 @@ object Dependencies {
   val akkaDistributedData =       "com.typesafe.akka"          %% "akka-distributed-data-experimental" % akkaVersion
   val akkaHttp =                  "com.typesafe.akka"          %% "akka-http"                          % "10.0.6"
   val akkaClusterHttpManagement = "com.lightbend.akka"         %% "akka-management-cluster-http"       % "0.2"
-//  val akkaVisualisation =         "com.ing.akka"               %% "akka-visualisation"                 % akkaVisualisationVersion
+
+  val akkaHttpSprayJson =         "com.typesafe.akka"          %% "akka-http-spray-json"               % "10.0.6"
+  val akkaHttpJackson =           "com.typesafe.akka"          %% "akka-http-jackson"                  % "10.0.6"
+  val jacksonJsonSchema =         "com.fasterxml.jackson.module" % "jackson-module-jsonSchema"         % "2.5.2"
+
+  val jacksonScala = "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.8.8"
 
   val levelDB   =                 "org.iq80.leveldb"           %  "leveldb"                            % "0.7"
   val levelDBJni =                "org.fusesource.leveldbjni"  %  "leveldbjni-all"                     % "1.8"

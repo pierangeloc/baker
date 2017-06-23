@@ -110,12 +110,16 @@ lazy val http = project.in(file("http"))
   .settings(defaultModuleSettings)
   .settings(noPublishSettings)
   .settings(
+    unmanagedResourceDirectories in Compile += baseDirectory.value / "frontend" / "dist",
     libraryDependencies ++=
       compileDeps(
         akkaHttp,
         akkaClusterHttpManagement,
-//        akkaVisualisation,
-        ficusConfig
+        ficusConfig,
+        akkaHttpSprayJson,
+        jacksonJsonSchema,
+        akkaHttpJackson,
+        jacksonScala
       ) ++ testDeps(
         scalaTest
       )
