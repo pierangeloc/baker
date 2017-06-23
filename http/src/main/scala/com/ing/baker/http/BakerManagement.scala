@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicReference
 import akka.Done
 import akka.actor.ActorSystem
 import akka.cluster.Cluster
-import akka.http.scaladsl.server.RouteResult
+import akka.http.scaladsl.server.{Directives, RouteResult}
 import akka.http.scaladsl.{ConnectionContext, Http}
 import akka.stream.ActorMaterializer
 
@@ -15,7 +15,7 @@ class BakerManagement(
                        pathPrefix: Option[String] = None,
                        https: Option[ConnectionContext] = None,
                        cluster: Option[Cluster] = None
-                     ) {
+                     ) extends Directives {
   private implicit val system = ActorSystem()
   private implicit val materializer = ActorMaterializer()
   private val settings = new BakerManagementSettings(system.settings.config)
@@ -28,7 +28,7 @@ class BakerManagement(
     val serverBindingPromise = Promise[Http.ServerBinding]()
     if (bindingFuture.compareAndSet(null, serverBindingPromise.future)) {
 
-      val routes = RouteResult.route2HandlerFlow(BakerManagementRoutes(pathPrefix, cluster))
+      val routes = RouteResult.route2HandlerFlow(BakerManagementRoutes(pathPrefix, cluster) ~ BakerUIRoutes(pathPrefix))
 
       val serverFutureBinding = https match {
         case Some(context) ⇒

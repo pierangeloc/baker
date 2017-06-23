@@ -4,8 +4,7 @@ import sbt._
 object Dependencies {
 
   val akkaVersion = "2.4.17"
-  val kageraVersion = "0.2.20"
-  val akkaVisualisationVersion = "1.0.0-SNAPSHOT"
+  val kageraVersion = "0.2.22"
 
   val typeSafeConfig =            "com.typesafe"               %  "config"                             % "1.3.1"
 
@@ -13,7 +12,7 @@ object Dependencies {
 
   val scalaTest =                 "org.scalatest"              %% "scalatest"                          % "2.2.6"
   val mockito =                   "org.mockito"                %  "mockito-all"                        % "1.10.19"
-  val junit =                     "com.novocode"               %  "junit-interface"                    % "0.11"
+  val junitInterface =            "com.novocode"               %  "junit-interface"                    % "0.11"
 
   val akkaActor =                 "com.typesafe.akka"          %% "akka-actor"                         % akkaVersion
   val akkaPersistence =           "com.typesafe.akka"          %% "akka-persistence"                   % akkaVersion
@@ -21,9 +20,10 @@ object Dependencies {
   val akkaClusterSharding =       "com.typesafe.akka"          %% "akka-cluster-sharding"              % akkaVersion
   val akkaSlf4j =                 "com.typesafe.akka"          %% "akka-slf4j"                         % akkaVersion
   val akkaTestKit =               "com.typesafe.akka"          %% "akka-testkit"                       % akkaVersion
+  val akkaDistributedData =       "com.typesafe.akka"          %% "akka-distributed-data-experimental" % akkaVersion
   val akkaHttp =                  "com.typesafe.akka"          %% "akka-http"                          % "10.0.6"
   val akkaClusterHttpManagement = "com.lightbend.akka"         %% "akka-management-cluster-http"       % "0.2"
-  val akkaVisualisation =         "com.ing.akka"               %% "akka-visualisation"                 % akkaVisualisationVersion
+//  val akkaVisualisation =         "com.ing.akka"               %% "akka-visualisation"                 % akkaVisualisationVersion
 
   val levelDB   =                 "org.iq80.leveldb"           %  "leveldb"                            % "0.7"
   val levelDBJni =                "org.fusesource.leveldbjni"  %  "leveldbjni-all"                     % "1.8"
@@ -48,7 +48,6 @@ object Dependencies {
   val jodaConvert =               "org.joda"                   %  "joda-convert"                       % "1.8.1"
   val scalaXml =                  "org.scala-lang.modules"     %% "scala-xml"                          % "1.0.4"
   val slf4jApi =                  "org.slf4j"                  %  "slf4j-api"                          % "1.7.25"
-  val slf4jSimple =               "org.slf4j"                  %  "slf4j-simple"                       % "1.7.25"
 
   def scopeDeps(scope: String, modules: Seq[ModuleID]) =  modules.map(m => m % scope)
   def compileDeps(modules: ModuleID*) = modules.toSeq

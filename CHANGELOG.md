@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1
+- Fixed a bug in the runtime that it could not bind an ingredient multiple times as parameter for an interaction
+- Removed the JCompiledRecipe and moved the functionality to the CompiledRecipe
+- Added a validation to the java Recipe that @sFiresEvent and @ProvidesIngredient are not used at the same time.
+
+## 1.0.0
+- baker modules are reorganized to support mode modularity and loose coupling
+- created separate modules: compiler, intermediate-language, recipe-dsl, runtime
+- design time and runtime parts of baker are now separate and ideally could be updated independently
+
 ## 0.2.19
 - enabled kryo serialization for all baker events that extend from com.ing.baker.api.Event interface
 - disabled default Java serialization
