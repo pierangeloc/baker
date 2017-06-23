@@ -106,20 +106,16 @@ lazy val testModule = project.in(file("test-module"))
   )
   .dependsOn(recipedsl, compiler, intermediateLanguage, runtime)
 
-lazy val http = project.in(file("http"))
+lazy val httpManagement = project.in(file("http-management"))
   .settings(defaultModuleSettings)
-  .settings(noPublishSettings)
   .settings(
+    moduleName := "http-management",
     unmanagedResourceDirectories in Compile += baseDirectory.value / "frontend" / "dist",
     libraryDependencies ++=
       compileDeps(
         akkaHttp,
         akkaClusterHttpManagement,
-        ficusConfig,
-        akkaHttpSprayJson,
-        jacksonJsonSchema,
-        akkaHttpJackson,
-        jacksonScala
+        ficusConfig
       ) ++ testDeps(
         scalaTest
       )
@@ -129,4 +125,4 @@ lazy val root = project
   .in(file("."))
   .settings(defaultModuleSettings)
   .settings(noPublishSettings)
-  .aggregate(runtime, compiler, recipedsl, intermediateLanguage, testModule)
+  .aggregate(runtime, compiler, recipedsl, intermediateLanguage, testModule, httpManagement)

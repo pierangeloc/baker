@@ -15,19 +15,17 @@ class BakerManagement(
                        pathPrefix: Option[String] = None,
                        https: Option[ConnectionContext] = None,
                        cluster: Option[Cluster] = None
-                     ) extends Directives {
-  private implicit val system = ActorSystem()
-  private implicit val materializer = ActorMaterializer()
-  private val settings = new BakerManagementSettings(system.settings.config)
+                     )(implicit actorSystem: ActorSystem) extends Directives {
 
-  import system.dispatcher
+  private implicit val materializer = ActorMaterializer()
+  private val settings = new BakerManagementSettings(actorSystem.settings.config)
+  import actorSystem.dispatcher
 
   private val bindingFuture = new AtomicReference[Future[Http.ServerBinding]]()
 
   def start(): Future[Done] = {
     val serverBindingPromise = Promise[Http.ServerBinding]()
     if (bindingFuture.compareAndSet(null, serverBindingPromise.future)) {
-
       val routes = RouteResult.route2HandlerFlow(BakerManagementRoutes(pathPrefix, cluster) ~ BakerUIRoutes(pathPrefix))
 
       val serverFutureBinding = https match {
