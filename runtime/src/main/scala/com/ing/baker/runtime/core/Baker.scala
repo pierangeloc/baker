@@ -16,6 +16,7 @@ import com.ing.baker.il._
 import com.ing.baker.il.petrinet._
 import com.ing.baker.runtime.actor._
 import com.ing.baker.runtime.core.Baker._
+import com.ing.baker.runtime.event_extractors.{CompositeEventExtractor, EventExtractor}
 import fs2.Strategy
 import io.kagera.akka.actor.PetriNetInstanceProtocol._
 import io.kagera.akka.actor._
@@ -35,52 +36,7 @@ import scala.util.{Failure, Success, Try}
 
 object Baker {
 
-  def implementationsToProviderMap(implementations: Seq[AnyRef]) : Map[String, () => AnyRef] = {
-    implementations.flatMap(im => getPossibleInteractionNamesForImplementation(im).map(_ -> (() => im))).toMap
-  }
-
-  /**
-    * This method looks for any valid name that this interaction implements
-    * This is its own class name
-    * The class name of any interface it implements
-    * The value of the field "name"
-    * @param obj
-    * @return List of possible interaction names this obj can be implementing
-    */
-  def getPossibleInteractionNamesForImplementation(obj: Any) : Set[String] = {
-    val nameField: String = Try{
-      obj.getClass.getDeclaredField("name")
-    }.toOption match {
-      case Some(field) if field.getType == classOf[String]  => {
-        field.setAccessible(true)
-        field.get(obj).asInstanceOf[String]
-      }
-      case None => ""
-    }
-    val interfaceNames: Seq[String] = obj.getClass.getInterfaces.map(_.getSimpleName).toSeq
-    Set[String](obj.getClass.getSimpleName, nameField).filterNot(s => s equals "") ++ interfaceNames
-  }
-
-  private def checkIfImplementationIsValidForInteraction(implementation: AnyRef, interaction: InteractionTransition[_]): Boolean ={
-    Try {
-      implementation.getClass.getMethod("apply", interaction.inputFields.map(_._2): _*)
-    }.isSuccess
-  }
-
-  private def checkIfValidImplementationsProvided(implementations: Map[String, () => AnyRef], actions: Set[InteractionTransition[_]]): Set[String] = {
-    //Check if all implementations are provided
-    val missingImplementations: Set[String] = actions.filterNot(i => implementations.contains(i.originalInteractionName))
-      .map(i => s"No implementation provided for interaction: ${i.originalInteractionName}")
-
-    //Check if the provided implementations are valid
-    val neededImplementations: Map[String, () => AnyRef] = implementations.filterKeys(s => actions.exists(i => s equals i.interactionName))
-    val invalidImplementations: Seq[String] = neededImplementations.flatMap { case (interactionName, impl) => {
-      if (checkIfImplementationIsValidForInteraction(impl.apply(), actions.getByLabel(interactionName))) None
-      else Some(s"Invalid implementation provided for interaction: $interactionName")
-    }}.toSeq
-
-    missingImplementations ++ invalidImplementations
-  }
+  val eventExtractor: EventExtractor = new CompositeEventExtractor()
 
   def transitionForRuntimeEvent(runtimeEvent: RuntimeEvent, compiledRecipe: CompiledRecipe) =
     compiledRecipe.petriNet.transitions.findByLabel(runtimeEvent.name).getOrElse {
@@ -88,7 +44,7 @@ object Baker {
     }
 
   @throws[NonSerializableException]
-  def assertEventsAndIngredientsAreSerializable(compiledRecipe: CompiledRecipe)(implicit actorSystem: ActorSystem): Unit = {
+  def assertIngredientsAreSerializable(compiledRecipe: CompiledRecipe)(implicit actorSystem: ActorSystem): Unit = {
     val serialization = SerializationExtension(actorSystem)
 
     val hasAkkaSerializer = (clazz: Class[_]) => Try { serialization.serializerFor(clazz) }.isSuccess
@@ -112,15 +68,20 @@ object Baker {
   * The Baker can bake a recipe, create a process and respond to events.
   */
 class Baker(val compiledRecipe: CompiledRecipe,
-            val implementations: Map[String, () => AnyRef])
+            val interactionFunctions: InteractionTransition[_] => (ProcessState => RuntimeEvent))
            (implicit val actorSystem: ActorSystem) {
 
   import actorSystem.dispatcher
 
   def this(compiledRecipe: CompiledRecipe,
+           implementations: Map[String, AnyRef])
+          (implicit actorSystem: ActorSystem) =
+    this(compiledRecipe, ReflectedInteractionTask.createInteractionFunctions(compiledRecipe.interactionTransitions, implementations))(actorSystem)
+
+  def this(compiledRecipe: CompiledRecipe,
            implementations: Seq[AnyRef])
           (implicit actorSystem: ActorSystem) =
-    this(compiledRecipe, implementationsToProviderMap(implementations))(actorSystem)
+    this(compiledRecipe, ReflectedInteractionTask.implementationsToProviderMap(implementations))(actorSystem)
 
   implicit val materializer = ActorMaterializer()
   private val log = LoggerFactory.getLogger(classOf[Baker])
@@ -133,14 +94,8 @@ class Baker(val compiledRecipe: CompiledRecipe,
   if (compiledRecipe.validationErrors.nonEmpty)
     throw new RecipeValidationException(compiledRecipe.validationErrors.mkString(", "))
 
-  //Check if all implementations are provided
-  val allImplementations = implementations
-  val implementationErrors = checkIfValidImplementationsProvided(allImplementations, compiledRecipe.interactionTransitions)
-  if(implementationErrors.nonEmpty)
-    throw new BakerException(implementationErrors.mkString(", "))
-
   //Validate if all events and ingredients are serializable
-  assertEventsAndIngredientsAreSerializable(compiledRecipe)
+  assertIngredientsAreSerializable(compiledRecipe)
 
   /**
     * We do this to force initialization of the journal (database) connection.
@@ -165,7 +120,7 @@ class Baker(val compiledRecipe: CompiledRecipe,
 
   private val actorIdleTimeout = config.as[Option[FiniteDuration]]("baker.actor.idle-timeout")
 
-  val petriNetRuntime: PetriNetRuntime[Place, Transition, ProcessState, RuntimeEvent] = new RecipeRuntime(allImplementations)
+  val petriNetRuntime: PetriNetRuntime[Place, Transition, ProcessState, RuntimeEvent] = new RecipeRuntime(interactionFunctions)
 
   private val petriNetInstanceActorProps =
     Util.recipePetriNetProps(compiledRecipe.petriNet,petriNetRuntime,
@@ -278,13 +233,15 @@ class Baker(val compiledRecipe: CompiledRecipe,
     * with the response you have NO guarantee that the event is received by baker.
     */
   def handleEventAsync(processId: UUID, event: Any): BakerResponse = {
-    //Check if the event is of a know sensory event and create a RuntimeEvent from it.
-    val runtimeEvent = compiledRecipe.sensoryEvents.find(se => se.name == event.getClass.getSimpleName) match {
-      case Some(compiledEvent) => RuntimeEvent.forEvent(event, compiledEvent)
-      case None => throw new BakerException(s"Fired event $event is not recognised as any valid sensory event")
-    }
 
-    val msg = createEventMsg(processId, runtimeEvent)
+    val runtimeEvent = Baker.eventExtractor.extractEvent(event)
+
+    val eventType = compiledRecipe.sensoryEvents.find(se => se.name == runtimeEvent.name)
+      .getOrElse(throw new BakerException(s"Fired event $event is not recognised as any valid sensory event"))
+
+    val validatedEvent = runtimeEvent.validate(eventType)
+
+    val msg = createEventMsg(processId, validatedEvent)
     val source = petriNetApi.askAndCollectAll(msg, waitForRetries = true)
     new BakerResponse(processId, source)
   }
