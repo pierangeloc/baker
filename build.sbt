@@ -144,6 +144,15 @@ lazy val recipeCompiler = project.in(file("compiler"))
   )
   .dependsOn(recipeDsl, intermediateLanguage, petrinetApi)
 
+lazy val bakerKafka = project.in(file("kafka"))
+  .settings(defaultModuleSettings)
+  .settings(
+    moduleName := "baker-kafka",
+    libraryDependencies ++=
+      compileDeps(slf4jApi, kafkaClients) ++ testDeps(scalaTest, scalaCheck, logback)
+  )
+  .dependsOn(recipeRuntime)
+
 lazy val baas = project.in(file("baas"))
   .settings(defaultModuleSettings)
   .settings(
@@ -190,4 +199,4 @@ lazy val baker = project
   .in(file("."))
   .settings(defaultModuleSettings)
   .settings(noPublishSettings)
-  .aggregate(bakertypes, petrinetApi, recipeRuntime, recipeCompiler, recipeDsl, intermediateLanguage, testModule)
+  .aggregate(bakertypes, recipeDsl, petrinetApi, intermediateLanguage, recipeCompiler, recipeRuntime, bakerKafka, testModule)

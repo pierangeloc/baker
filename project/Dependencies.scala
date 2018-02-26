@@ -16,6 +16,7 @@ object Dependencies {
       .exclude("com.typesafe.akka", "akka-stream")
 
   val scalaTest =                 "org.scalatest"              %% "scalatest"                          % "3.0.1"
+  val kafkaClients =              "org.apache.kafka"           %  "kafka-clients"                      % "0.10.2.1"
   val mockito =                   "org.mockito"                %  "mockito-all"                        % "1.10.19"
   val junitInterface =            "com.novocode"               %  "junit-interface"                    % "0.11"
 
@@ -40,7 +41,7 @@ object Dependencies {
   val scalaGraph  =               "org.scala-graph"            %% "graph-core"                         % "1.11.5"
   val scalaGraphDot =             "org.scala-graph"            %% "graph-dot"                          % "1.11.5"
 
-  val fs2Core  =                  "co.fs2"                     %% "fs2-core"                           % "0.9.4"
+  val fs2Core  =                  "co.fs2"                     %% "fs2-core"                           % "0.9.6"
   val catsCore =                  "org.typelevel"              %% "cats-core"                          % "0.9.0"
 
   def scalaReflect(scalaV: String) = "org.scala-lang"             %  "scala-reflect"                   % scalaV
