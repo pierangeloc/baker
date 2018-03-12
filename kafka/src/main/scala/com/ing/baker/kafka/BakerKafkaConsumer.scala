@@ -9,7 +9,7 @@ import java.util.function.Function
 import com.ing.baker.kafka.BakerKafkaConsumer._
 import com.ing.baker.runtime.core.{Baker, NoSuchProcessException}
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.slf4j.LoggerFactory
+import org.slf4j.{LoggerFactory, MDC}
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
@@ -30,7 +30,7 @@ class BakerKafkaConsumer[K, V, E](val baker: Baker,
   private val log = LoggerFactory.getLogger(classOf[BakerKafkaConsumer[_, _, _]])
 
   def this(baker: Baker,
-           eventExtractor: Function[V, Optional[java.util.Map.Entry[UUID, E]]],
+           eventExtractor: V => Option[(String, E)],
            props: Properties,
            topic: String) {
 
@@ -38,8 +38,13 @@ class BakerKafkaConsumer[K, V, E](val baker: Baker,
   }
 
   private val service = Executors.newSingleThreadExecutor
-  private var pollTask: java.util.concurrent.Future[Unit] = null
+  private var pollTask: java.util.concurrent.Future[Boolean] = null
   private val isRunning = new AtomicBoolean(true)
+
+  private val pollLoop: Runnable = () => {
+    while (isRunning.get)
+      doPoll()
+  }
 
   def start(): Unit = {
 
@@ -47,11 +52,6 @@ class BakerKafkaConsumer[K, V, E](val baker: Baker,
       log.warn("Already started")
 
     else {
-      val pollLoop: Runnable = () => {
-        while (isRunning.get)
-          doPoll()
-      }
-
       consumer.subscribe(Collections.singletonList(topic))
       pollTask = service.submit(pollLoop, true)
     }
@@ -97,24 +97,29 @@ class BakerKafkaConsumer[K, V, E](val baker: Baker,
   def deliverEvent(processId: String, event: Any): Unit = {
 
     var eventProcessed = false
+    MDC.put("processId", processId)
 
     while (!eventProcessed)
-      try {
-        baker.processEventAsync(processId, event, eventDeliverTimout.toMillis millis).confirmReceived(eventDeliverTimout)
+    try {
+        baker.processEventAsync(processId, event, timeout = eventDeliverTimout.toMillis millis).confirmReceived(eventDeliverTimout)
         eventProcessed = true
       } catch {
         case _: NoSuchProcessException =>
           log.trace("No such process: {}", processId)
           eventProcessed = true
         case e: TimeoutException =>
-          log.warn("Processing of event timed out for processId {}. Event: {}", processId, event, e)
+          log.warn(s"Timeout trying to deliver event: ${event.getClass.getSimpleName}", e)
         // We ignore this exception on purpose
         case e: Exception =>
           // This should never happen, we don't throw the exception to not stop the poll loop
-          log.error("Unexpected exception from baker for process: {}", processId, e)
+          log.error(s"Unexpected exception trying to deliver event: ${event.getClass.getSimpleName}", e)
           // We wait here
           Thread.sleep(unexpectedExceptionTimeoutMillis)
       }
+    finally {
+
+      MDC.remove("processId")
+    }
   }
 }
 
