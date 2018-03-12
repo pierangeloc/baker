@@ -12,7 +12,7 @@ import com.ing.baker.runtime.actor.InternalBakerMessage
 import com.ing.baker.runtime.actor.process_instance.ProcessInstance._
 import com.ing.baker.runtime.actor.process_instance.ProcessInstanceLogger._
 import com.ing.baker.runtime.actor.process_instance.ProcessInstanceProtocol._
-import com.ing.baker.runtime.actor.serialization.{Encryption, ObjectSerializer}
+import com.ing.baker.runtime.actor.serialization.Encryption
 import fs2.Strategy
 
 import scala.concurrent.duration._
@@ -44,13 +44,12 @@ object ProcessInstance {
 /**
   * This actor is responsible for maintaining the state of a single petri net instance.
   */
-class ProcessInstance[P[_], T[_, _], S, E](
-                                             processType: String,
-                                             processTopology: PetriNet[P[_], T[_, _]],
-                                             settings: Settings,
-                                             runtime: PetriNetRuntime[P, T, S, E],
-                                             override implicit val placeIdentifier: Identifiable[P[_]],
-                                             override implicit val transitionIdentifier: Identifiable[T[_, _]]) extends ProcessInstanceRecovery[P, T, S, E](processTopology, settings.encryption, runtime.eventSourceFn) {
+class ProcessInstance[P[_], T[_, _], S, E](processType: String,
+                                            processTopology: PetriNet[P[_], T[_, _]],
+                                            settings: Settings,
+                                            runtime: PetriNetRuntime[P, T, S, E],
+                                            override implicit val placeIdentifier: Identifiable[P[_]],
+                                            override implicit val transitionIdentifier: Identifiable[T[_, _]]) extends ProcessInstanceRecovery[P, T, S, E](processTopology, settings.encryption, runtime.eventSourceFn) {
 
 
   val log: DiagnosticLoggingAdapter = Logging.getLogger(this)
@@ -121,7 +120,7 @@ class ProcessInstance[P[_], T[_, _], S, E](
     case GetState ⇒
       sender() ! fromExecutionInstance(instance)
 
-    case event@TransitionFiredEvent(jobId, t, timeStarted, timeCompleted, consumed, produced, output) ⇒
+    case event@TransitionFiredEvent(jobId, t, correlationId, timeStarted, timeCompleted, consumed, produced, output) ⇒
 
       val transition = t.asInstanceOf[T[_, _]]
       val transitionId = transitionIdentifier(transition).value
@@ -134,13 +133,13 @@ class ProcessInstance[P[_], T[_, _], S, E](
           .andThen(step)
           .andThen {
             case (updatedInstance, newJobs) ⇒
-              sender() ! TransitionFired(jobId, transitionId, marshal[P](consumed.asInstanceOf[Marking[P]]), marshal[P](produced.asInstanceOf[Marking[P]]), fromExecutionInstance(updatedInstance), newJobs.map(_.id))
+              sender() ! TransitionFired(jobId, transitionId, correlationId, marshal[P](consumed.asInstanceOf[Marking[P]]), marshal[P](produced.asInstanceOf[Marking[P]]), fromExecutionInstance(updatedInstance), newJobs.map(_.id))
               context become running(updatedInstance, scheduledRetries - jobId)
               updatedInstance
           }
       )
 
-    case event@TransitionFailedEvent(jobId, t, timeStarted, timeFailed, consume, input, reason, strategy) ⇒
+    case event@TransitionFailedEvent(jobId, t, correlationId, timeStarted, timeFailed, consume, input, reason, strategy) ⇒
 
       val transition = t.asInstanceOf[T[_, _]]
       val transitionId = transitionIdentifier(transition).value
@@ -162,7 +161,7 @@ class ProcessInstance[P[_], T[_, _], S, E](
                 val retry = system.scheduler.scheduleOnce(delay milliseconds) {
                   executeJob(updatedInstance.jobs(jobId), originalSender)
                 }
-                sender() ! TransitionFailed(jobId, transitionId, marshal[P](consume.asInstanceOf[Marking[P]]), input, reason, strategy)
+                sender() ! TransitionFailed(jobId, transitionId, correlationId, marshal[P](consume.asInstanceOf[Marking[P]]), input, reason, strategy)
                 context become running(updatedInstance, scheduledRetries + (jobId -> retry))
               }
           )
@@ -171,13 +170,13 @@ class ProcessInstance[P[_], T[_, _], S, E](
           val consumedMarking = consume.asInstanceOf[Marking[P]]
           val producedMarking = produced.asInstanceOf[Marking[P]]
           val transitionFiredEvent = TransitionFiredEvent[P, T, E](
-            jobId, transition, timeStarted, timeFailed, consumedMarking, producedMarking, out.asInstanceOf[E])
+            jobId, transition, correlationId, timeStarted, timeFailed, consumedMarking, producedMarking, out.asInstanceOf[E])
 
           persistEvent(instance, transitionFiredEvent)(
             eventSource.apply(instance)
               .andThen(step)
               .andThen { case (updatedInstance, newJobs) ⇒
-                sender() ! TransitionFired(jobId, transitionId, marshal[P](consumedMarking), marshal[P](producedMarking), fromExecutionInstance(updatedInstance), newJobs.map(_.id))
+                sender() ! TransitionFired(jobId, transitionId, correlationId, marshal[P](consumedMarking), marshal[P](producedMarking), fromExecutionInstance(updatedInstance), newJobs.map(_.id))
                 context become running(updatedInstance, scheduledRetries - jobId)
               })
 
@@ -185,25 +184,33 @@ class ProcessInstance[P[_], T[_, _], S, E](
           persistEvent(instance, event)(
             eventSource.apply(instance)
               .andThen { updatedInstance ⇒
-                sender() ! TransitionFailed(jobId, transitionId, marshal[P](consume.asInstanceOf[Marking[P]]), input, reason, strategy)
+                sender() ! TransitionFailed(jobId, transitionId, correlationId, marshal[P](consume.asInstanceOf[Marking[P]]), input, reason, strategy)
                 context become running(updatedInstance, scheduledRetries - jobId)
               })
       }
 
-    case FireTransition(transitionId, input, _) ⇒
+    case FireTransition(transitionId, input, correlationIdOption) ⇒
 
       val transition = topology.transitions.getById(transitionId, "transition in petrinet").asInstanceOf[T[Any, Any]]
 
-      runtime.jobPicker.createJob[S, Any, Any](transition, input).run(instance).value match {
-        case (updatedInstance, Right(job)) ⇒
-          executeJob(job, sender())
-          context become running(updatedInstance, scheduledRetries)
-        case (_, Left(reason)) ⇒
+      def alreadyReceived(id: String) = instance.receivedCorrelationIds.contains(id) || instance.jobs.values.exists(_.correlationId == Some(id))
 
-          log.fireTransitionRejected(processId, transition.toString, reason)
+      correlationIdOption match {
+        case Some(correlationId) if alreadyReceived(correlationId) =>
+            sender() ! AlreadyReceived(correlationId)
+        case _ =>
+          runtime.jobPicker.createJob[S, Any, Any](transition, input, correlationIdOption).run(instance).value match {
+            case (updatedInstance, Right(job)) ⇒
+              executeJob(job, sender())
+              context become running(updatedInstance, scheduledRetries)
+            case (_, Left(reason)) ⇒
 
-          sender() ! TransitionNotEnabled(transitionId, reason)
+              log.fireTransitionRejected(processId, transition.toString, reason)
+
+              sender() ! TransitionNotEnabled(transitionId, reason)
+          }
       }
+
     case Initialize(_, _) ⇒
       sender() ! AlreadyInitialized
   }
@@ -233,7 +240,7 @@ class ProcessInstance[P[_], T[_, _], S, E](
 
   def scheduleFailedJobsForRetry(instance: Instance[P, T, S]): Map[Long, Cancellable] = {
     instance.jobs.values.foldLeft(Map.empty[Long, Cancellable]) {
-      case (map, j@Job(_, _, _, _, _, Some(com.ing.baker.petrinet.runtime.ExceptionState(failureTime, _, _, RetryWithDelay(delay))))) ⇒
+      case (map, j @ Job(_, _, _, _, _, _, Some(com.ing.baker.petrinet.runtime.ExceptionState(failureTime, _, _, RetryWithDelay(delay))))) ⇒
         val newDelay = failureTime + delay - System.currentTimeMillis()
         if (newDelay < 0) {
           executeJob(j, sender())

@@ -146,6 +146,30 @@ class BakerExecutionSpec extends TestRecipeHelper {
       verify(testInteractionOneMock).apply(processId.toString, "initialIngredient")
     }
 
+
+    "not allow a sensory event be fired twice with the same correlation id" in {
+      val recipe =
+        Recipe("correlationIdSensoryEventRecipe")
+          .withInteraction(interactionOne)
+          .withSensoryEvent(initialEvent)
+
+      val (baker, recipeId) = setupBakerWithRecipe(recipe, mockImplementations)
+
+      when(testInteractionOneMock.apply(anyString(), anyString())).thenReturn(interactionOneIngredientValue)
+
+      val processId = UUID.randomUUID().toString
+      baker.bake(recipeId, processId)
+
+      val executedFirst = baker.processEvent(processId, InitialEvent(initialIngredientValue), Some("abc"))
+      executedFirst shouldBe SensoryEventStatus.Completed
+      verify(testInteractionOneMock).apply(processId.toString, "initialIngredient")
+
+      val executedSecond = baker.processEvent(processId, InitialEvent(initialIngredientValue), Some("abc"))
+      executedSecond shouldBe SensoryEventStatus.AlreadyReceived
+      verifyNoMoreInteractions(testInteractionOneMock)
+    }
+
+
     "only allow a sensory event be fired twice if the max firing limit is set two" in {
       val recipe =
         Recipe("maxFiringLimitOfTwoOnSensoryEventRecipe")
@@ -718,6 +742,29 @@ class BakerExecutionSpec extends TestRecipeHelper {
         RuntimeEvent.create("SieveInteractionSuccessful", Seq("sievedIngredient" -> sievedIngredientValue)),
         RuntimeEvent.create("InteractionThreeSuccessful", Seq("interactionThreeIngredient" -> interactionThreeIngredientValue)),
         RuntimeEvent.create("InteractionFourSuccessful", Seq("interactionFourIngredient" -> interactionFourIngredientValue))
+      )
+    }
+
+    "be able to return all occurred event names" in {
+
+      val (baker, recipeId) = setupBakerWithRecipe("CheckEventNamesRecipe")
+
+      val processId = UUID.randomUUID().toString
+      baker.bake(recipeId, processId)
+
+      //Handle two event
+      baker.processEvent(processId, InitialEvent(initialIngredientValue))
+      baker.processEvent(processId, SecondEvent())
+
+      //Check if both the new event and the events occurred in the past are in the eventsList
+      baker.eventNames(processId) should contain only(
+        "InitialEvent",
+        "EventFromInteractionTwo",
+        "SecondEvent",
+        "InteractionOneSuccessful",
+        "SieveInteractionSuccessful",
+        "InteractionThreeSuccessful",
+        "InteractionFourSuccessful"
       )
     }
 
