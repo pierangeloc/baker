@@ -20,6 +20,7 @@ object BakerKafkaConsumer {
   private val eventDeliverTimout = Duration.ofSeconds(10)
   private val pollTimeoutMillis = 10000
   private val unexpectedExceptionTimeoutMillis = 1000
+  private val stopTimeout = (10, TimeUnit.SECONDS)
 }
 
 class BakerKafkaConsumer[K, V, E](val baker: Baker,
@@ -61,7 +62,7 @@ class BakerKafkaConsumer[K, V, E](val baker: Baker,
 
     val records = consumer.poll(pollTimeoutMillis)
 
-    records.asScala.foreach { record =>
+    records.iterator.asScala.foreach { record =>
 
       if (log.isTraceEnabled)
         log.trace(record.value.toString)
@@ -83,7 +84,7 @@ class BakerKafkaConsumer[K, V, E](val baker: Baker,
     if (pollTask != null) {
       isRunning.set(false)
       try
-        pollTask.get(10, TimeUnit.SECONDS)
+        pollTask.get(stopTimeout._1, stopTimeout._2)
       catch {
         case e: Exception => pollTask.cancel(true)
       } finally
